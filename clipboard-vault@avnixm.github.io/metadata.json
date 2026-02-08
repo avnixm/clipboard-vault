@@ -1,0 +1,9 @@
+{
+  "uuid": "clipboard-vault@avnixm.github.io",
+  "name": "Clipboard Vault",
+  "description": "Clipboard history with Win+V style popup. Persist history, search, keyboard shortcut.",
+  "shell-version": ["45", "46", "47", "48", "49"],
+  "version": 2,
+  "settings-schema": "org.gnome.shell.extensions.clipboard-vault",
+  "url": "https://github.com/example/clipboard-vault"
+}

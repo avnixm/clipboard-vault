@@ -1,0 +1,110 @@
+/* Clipboard Vault — Win+V style popup (Phase 2) */
+
+.clipboard-vault-popup {
+  padding: 12px;
+  min-width: 320px;
+  max-width: 420px;
+  border-radius: 12px;
+  background-color: rgba(30, 30, 30, 0.95);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.4);
+}
+
+.clipboard-vault-search-entry {
+  margin-bottom: 8px;
+  padding: 8px 12px;
+  border-radius: 8px;
+  font-size: 14px;
+  min-height: 20px;
+  background-color: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  color: #fff;
+  caret-color: #fff;
+}
+
+.clipboard-vault-search-entry:focus {
+  border-color: rgba(78, 154, 246, 0.6);
+  background-color: rgba(255, 255, 255, 0.1);
+}
+
+.clipboard-vault-list {
+  spacing: 2px;
+  padding: 4px 0;
+}
+
+.clipboard-vault-list-scroll {
+  max-height: 360px;
+  -st-vfade-offset: 24px;
+}
+
+.clipboard-vault-row {
+  padding: 8px 12px;
+  border-radius: 8px;
+  spacing: 12px;
+  min-height: 20px;
+}
+
+.clipboard-vault-row:hover {
+  background-color: rgba(255, 255, 255, 0.12);
+}
+
+.clipboard-vault-row:selected,
+.clipboard-vault-row:focus,
+.clipboard-vault-row-selected {
+  background-color: rgba(78, 154, 246, 0.35);
+}
+
+.clipboard-vault-row-selected:hover {
+  background-color: rgba(78, 154, 246, 0.45);
+}
+
+.clipboard-vault-row-preview {
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.9);
+  max-width: 240px;
+}
+
+.clipboard-vault-row-timestamp {
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.5);
+}
+
+.clipboard-vault-empty {
+  padding: 16px;
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.5);
+}
+
+/* Panel menu content (indicator popover) */
+.clipboard-vault-menu-search {
+  min-width: 240px;
+  padding: 8px 12px;
+  margin: 4px 8px;
+}
+
+.clipboard-vault-menu-scroll {
+  max-height: 360px;
+  min-width: 280px;
+  -st-vfade-offset: 24px;
+}
+
+.clipboard-vault-menu-list {
+  spacing: 2px;
+  padding: 4px 0;
+}
+
+/* PopupMenu section for clipboard list: width and row states */
+.popup-menu-content .clipboard-vault-empty {
+  padding: 12px 16px;
+}
+
+.popup-menu-content .clipboard-vault-row-preview,
+.popup-menu-content .clipboard-vault-row-timestamp {
+  padding: 4px 0;
+}
+
+/* Ensure panel popover has usable width */
+.clipboard-vault-popover .popup-menu-content {
+  min-width: 320px;
+  padding: 8px 0;
+}
