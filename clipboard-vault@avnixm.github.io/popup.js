@@ -159,7 +159,6 @@ export class ClipboardPopup {
       const previewLabel = new St.Label({
         style_class: 'clipboard-vault-row-preview',
         text: preview,
-        ellipsize: 3,
         x_expand: true,
       });
       const tsLabel = new St.Label({

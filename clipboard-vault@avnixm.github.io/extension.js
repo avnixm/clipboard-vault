@@ -1,7 +1,7 @@
 /**
  * Clipboard Vault — GNOME Shell extension (ESModules, GNOME 45+).
- * Panel icon opens menu (anchored under icon) with clipboard history.
- * Keybinding toggles the same menu.
+ * Panel icon opens menu with clipboard history (pinned, favorite, recents).
+ * Pinned/favorite persist to disk and survive Shell restart.
  */
 
 import Meta from 'gi://Meta';
@@ -30,53 +30,87 @@ export default class ClipboardVaultExtension extends Extension {
     const maxItems = this._settings.get_int('max-items');
     const persist = this._settings.get_boolean('persist-history');
     this._historyPath = Storage.getHistoryPath(this.uuid);
+    this._pinnedPath = Storage.getPinnedPath(this.uuid);
 
-    let initialEntries = [];
+    const pinnedEntries = Storage.loadPinned(this._pinnedPath);
+    console.log('[Clipboard Vault] loaded pinned/favorite:', pinnedEntries.length);
+
+    let historyEntries = [];
     if (persist) {
-      initialEntries = Storage.loadHistory(this._historyPath);
-      console.log('[Clipboard Vault] loaded', initialEntries.length, 'entries from disk');
+      historyEntries = Storage.loadHistory(this._historyPath);
+      console.log('[Clipboard Vault] loaded history:', historyEntries.length);
     }
 
-    this._historyStore = new HistoryStore(maxItems, initialEntries);
+    const seen = new Set();
+    const merged = [];
+    for (const e of pinnedEntries) {
+      const t = (e.text || '').trim();
+      if (!t || seen.has(t)) continue;
+      seen.add(t);
+      merged.push({
+        id: e.id,
+        text: t,
+        timestamp: typeof e.timestamp === 'number' ? e.timestamp : Date.now(),
+        pinned: !!e.pinned,
+        favorite: !!e.favorite,
+      });
+    }
+    for (const e of historyEntries) {
+      const t = (e.text || '').trim();
+      if (!t || seen.has(t)) continue;
+      seen.add(t);
+      merged.push({
+        id: e.id,
+        text: t,
+        timestamp: typeof e.timestamp === 'number' ? e.timestamp : Date.now(),
+        pinned: !!e.pinned,
+        favorite: !!e.favorite,
+      });
+    }
+    console.log('[Clipboard Vault] merged initial entries:', merged.length);
+
+    this._historyStore = new HistoryStore(maxItems, merged);
 
     this._historyStore.setOnChange(() => {
       if (this._indicator) this._indicator.setItems();
-      if (this._settings.get_boolean('persist-history') && this._saveDebounce) {
-        this._saveDebounce.run();
+      if (this._settings.get_boolean('persist-history') && this._saveHistoryDebounce) {
+        this._saveHistoryDebounce.run();
+      }
+      if (this._savePinnedDebounce) {
+        this._savePinnedDebounce.run();
       }
     });
 
-    this._saveDebounce = debounce(() => {
-      if (!this._historyStore) return;
+    this._saveHistoryDebounce = debounce(() => {
+      if (!this._historyStore || !persist) return;
       Storage.saveHistory(this._historyPath, this._historyStore.getItems());
+      console.log('[Clipboard Vault] history saved');
+    }, SAVE_DEBOUNCE_MS);
+
+    this._savePinnedDebounce = debounce(() => {
+      if (!this._historyStore) return;
+      const entries = this._historyStore.getPinnedAndFavoriteEntries();
+      Storage.savePinned(this._pinnedPath, entries);
+      console.log('[Clipboard Vault] pinned saved, count=%d', entries.length);
     }, SAVE_DEBOUNCE_MS);
 
     const ignorePasswordLike = this._settings.get_boolean('ignore-password-like');
     this._poller = new ClipboardPoller((newText) => {
       if (!newText || !String(newText).trim()) return;
       if (ignorePasswordLike && isPasswordLike(newText)) return;
-      const itemsBefore = this._historyStore.getItems();
-      const firstBefore = itemsBefore[0]?.text;
       const changed = this._historyStore.addText(newText);
       if (!changed) return;
-      const itemsAfter = this._historyStore.getItems();
-      const firstAfter = itemsAfter[0]?.text;
-      const isDedup = itemsBefore.some((e) => e.text === firstAfter) && firstBefore !== firstAfter;
+      const size = this._historyStore.size();
       const preview = newText.length > 40 ? newText.substring(0, 40) + '…' : newText;
-      if (isDedup) {
-        console.log('[Clipboard Vault] dedup, moved to top:', preview);
-      } else {
-        console.log('[Clipboard Vault] captured:', preview);
-      }
+      console.log('[Clipboard Vault] store.addText done, size=%d:', size, preview);
     });
     this._poller.start();
-    console.log('[Clipboard Vault] poller started');
 
     const ext = Extension.lookupByURL(import.meta.url);
     const dirObj = ext?.dir ?? this.dir;
     const extensionDir = typeof dirObj === 'string' ? dirObj : (dirObj?.get_path?.() ?? '');
 
-    const clipboard = St.Clipboard.get_default(St.ClipboardType.CLIPBOARD);
+    const clipboard = St.Clipboard.get_default();
     this._indicator = new ClipboardVaultIndicator(
       extensionDir,
       () => (this._historyStore ? this._historyStore.getItems() : []),
@@ -86,6 +120,12 @@ export default class ClipboardVaultExtension extends Extension {
         } catch (e) {
           console.warn('[Clipboard Vault] clipboard set failed:', e.message);
         }
+      },
+      (text, pinned) => {
+        if (this._historyStore) this._historyStore.setPinned(text, pinned);
+      },
+      (text, favorite) => {
+        if (this._historyStore) this._historyStore.setFavorite(text, favorite);
       }
     );
     Main.panel.addToStatusArea('clipboard-vault', this._indicator, 0, 'right');
@@ -111,6 +151,7 @@ export default class ClipboardVaultExtension extends Extension {
       if (trigger > 0 && this._historyStore) {
         this._historyStore.clear();
         Storage.deleteHistory(this._historyPath);
+        Storage.deletePinned(this._pinnedPath);
         this._settings.set_int('clear-history-trigger', 0);
         console.log('[Clipboard Vault] history cleared');
       }
@@ -163,10 +204,10 @@ export default class ClipboardVaultExtension extends Extension {
 
   disable() {
     console.log('[Clipboard Vault] disable()');
-    if (this._saveDebounce && this._historyStore && this._settings?.get_boolean('persist-history')) {
-      this._saveDebounce.flush();
-    }
-    this._saveDebounce = null;
+    if (this._saveHistoryDebounce) this._saveHistoryDebounce.flush();
+    if (this._savePinnedDebounce) this._savePinnedDebounce.flush();
+    this._saveHistoryDebounce = null;
+    this._savePinnedDebounce = null;
     try {
       Main.wm.removeKeybinding(KEYBINDING_KEY);
     } catch (_e) {}
